@@ -1,7 +1,7 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from starlette.middleware.sessions import SessionMiddleware
+
 from app.core.config import get_settings
 from app.core.database import connect_to_mongo, close_mongo_connection
 from app.api.v1.router import api_router
@@ -25,8 +25,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Session middleware (required by Authlib for OAuth state)
-app.add_middleware(SessionMiddleware, secret_key=settings.JWT_SECRET_KEY)
+
 
 # CORS
 app.add_middleware(

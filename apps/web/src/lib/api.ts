@@ -158,9 +158,6 @@ class ApiClient {
     return this.request<ManagerUser[]>("/api/v1/manager/brands");
   }
 
-  getGoogleLoginUrl(role: string = "creator") {
-    return `${this.baseUrl}/api/v1/auth/google/login?role=${role}`;
-  }
 }
 
 export interface User {

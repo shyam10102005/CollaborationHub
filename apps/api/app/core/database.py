@@ -16,7 +16,6 @@ async def connect_to_mongo():
 
     # Create indexes for performance
     await db.users.create_index("email", unique=True)
-    await db.users.create_index("google_id", sparse=True)
     await db.creator_profiles.create_index("user_id", unique=True)
     await db.brand_profiles.create_index("user_id", unique=True)
     await db.social_accounts.create_index("user_id")

@@ -24,7 +24,7 @@ interface AuthContextType {
     website?: string,
     budgetRange?: string,
   ) => Promise<void>;
-  loginWithGoogle: (role?: string) => void;
+
   logout: () => void;
 }
 
@@ -99,9 +99,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await fetchUser();
   };
 
-  const loginWithGoogle = (role: string = "creator") => {
-    window.location.href = api.getGoogleLoginUrl(role);
-  };
 
   const logout = () => {
     localStorage.removeItem("access_token");
@@ -110,7 +107,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, registerCreator, registerBrand, loginWithGoogle, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, register, registerCreator, registerBrand, logout }}>
       {children}
     </AuthContext.Provider>
   );

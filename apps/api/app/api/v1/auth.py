@@ -1,6 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.responses import RedirectResponse
-from authlib.integrations.starlette_client import OAuth
 from app.core.database import get_db
 from app.core.config import get_settings
 from app.core.security import (
@@ -25,16 +24,6 @@ from app.schemas.user import (
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 settings = get_settings()
-
-# ── Google OAuth setup ────────────────────────────────────────────────
-oauth = OAuth()
-oauth.register(
-    name="google",
-    client_id=settings.GOOGLE_CLIENT_ID,
-    client_secret=settings.GOOGLE_CLIENT_SECRET,
-    server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
-    client_kwargs={"scope": "openid email profile"},
-)
 
 
 def user_doc_to_response(doc: dict) -> UserResponse:
@@ -158,13 +147,6 @@ async def login(data: LoginRequest):
     if not user:
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
-    # Block Google-only users from password login
-    if user.get("auth_provider") == "google" and not user.get("hashed_password"):
-        raise HTTPException(
-            status_code=400,
-            detail="This account uses Google sign-in. Please use the 'Sign in with Google' button.",
-        )
-
     if not verify_password(data.password, user["hashed_password"]):
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
@@ -184,95 +166,6 @@ async def refresh_token(data: RefreshRequest):
     refresh_token = create_refresh_token({"sub": payload["sub"]})
     return TokenResponse(access_token=access_token, refresh_token=refresh_token)
 
-
-# ── Google OAuth ──────────────────────────────────────────────────────
-
-@router.get("/google/login")
-async def google_login(request: Request, role: str = "creator"):
-    """Redirect user to Google consent screen."""
-    redirect_uri = f"{settings.BACKEND_URL}/api/v1/auth/google/callback"
-    # Store the role in session so callback knows what type of user to create
-    request.session["oauth_role"] = role
-    return await oauth.google.authorize_redirect(request, redirect_uri)
-
-
-@router.get("/google/callback")
-async def google_callback(request: Request):
-    """Handle callback from Google after user authorization."""
-    try:
-        token = await oauth.google.authorize_access_token(request)
-    except Exception:
-        raise HTTPException(status_code=400, detail="Google authentication failed")
-
-    # Extract user info from the ID token
-    user_info = token.get("userinfo")
-    if not user_info:
-        raise HTTPException(status_code=400, detail="Could not retrieve user info from Google")
-
-    google_id = user_info.get("sub")
-    email = user_info.get("email")
-    name = user_info.get("name")
-    picture = user_info.get("picture")
-    role = request.session.pop("oauth_role", "creator")
-
-    if not email:
-        raise HTTPException(status_code=400, detail="Google account has no email")
-
-    db = get_db()
-
-    # Look up user by google_id first, then by email
-    user = await db.users.find_one({"google_id": google_id})
-
-    if not user:
-        user = await db.users.find_one({"email": email})
-
-    if user:
-        # Existing user — link Google account if not already linked
-        update_fields = {}
-        if not user.get("google_id"):
-            update_fields["google_id"] = google_id
-        if not user.get("avatar_url") and picture:
-            update_fields["avatar_url"] = picture
-        if user.get("auth_provider") == "local":
-            update_fields["auth_provider"] = "google"
-
-        if update_fields:
-            await db.users.update_one({"_id": user["_id"]}, {"$set": update_fields})
-
-        user_id = user["_id"]
-    else:
-        # Create new user from Google profile
-        new_user = UserDocument(
-            email=email,
-            display_name=name,
-            avatar_url=picture,
-            auth_provider="google",
-            google_id=google_id,
-            user_type=role,
-        )
-        user_dict = new_user.model_dump(by_alias=True)
-        await db.users.insert_one(user_dict)
-        user_id = user_dict["_id"]
-
-        # Create role-specific profile
-        if role == "creator":
-            profile = CreatorProfileDocument(user_id=user_id)
-            await db.creator_profiles.insert_one(profile.model_dump(by_alias=True))
-        elif role == "brand":
-            profile = BrandProfileDocument(user_id=user_id, company_name=name)
-            await db.brand_profiles.insert_one(profile.model_dump(by_alias=True))
-
-    # Issue JWT tokens
-    access_token = create_access_token({"sub": user_id})
-    refresh_tok = create_refresh_token({"sub": user_id})
-
-    # Redirect to frontend callback page with tokens
-    redirect_url = (
-        f"{settings.FRONTEND_URL}/auth/callback"
-        f"?access_token={access_token}"
-        f"&refresh_token={refresh_tok}"
-    )
-    return RedirectResponse(url=redirect_url)
 
 
 # ── Profile ───────────────────────────────────────────────────────────

@@ -29,7 +29,6 @@ class UserDocument(BaseModel):
     location: Optional[str] = None
     user_type: str = "creator"  # creator, brand, manager
     auth_provider: str = "local"  # "local" or "google"
-    google_id: Optional[str] = None
     created_at: datetime = Field(default_factory=now_utc)
 
     model_config = {"populate_by_name": True}
