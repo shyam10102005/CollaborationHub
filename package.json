@@ -1,0 +1,11 @@
+{
+  "name": "collaborationhub",
+  "version": "1.0.0",
+  "description": "The Operating System for Content Creators",
+  "private": true,
+  "scripts": {
+    "dev": "node scripts/dev.js",
+    "server": "cd server && node index.js",
+    "client": "cd client && npx vite --host"
+  }
+}
